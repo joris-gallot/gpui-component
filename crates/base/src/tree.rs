@@ -23,6 +23,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("down", SelectDown, Some(CONTEXT)),
         KeyBinding::new("left", SelectLeft, Some(CONTEXT)),
         KeyBinding::new("right", SelectRight, Some(CONTEXT)),
+        KeyBinding::new("enter", Confirm { secondary: false }, Some(CONTEXT)),
     ]);
 }
 
