@@ -349,7 +349,9 @@ where
         }
     }
 
-    pub(crate) fn reset_on_cancel(mut self, reset: bool) -> Self {
+    /// Whether Escape clears the selection. On a list you leave and come back to,
+    /// losing the selected row loses your place.
+    pub fn reset_on_cancel(mut self, reset: bool) -> Self {
         self.reset_on_cancel = reset;
         self
     }
