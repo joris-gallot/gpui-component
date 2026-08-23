@@ -88,11 +88,16 @@ impl TreeEntry {
     }
 }
 
-/// Event emitted by a tree when user-visible expansion state changes.
+/// Event emitted by a tree when the user expands it, or moves through it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TreeEvent {
     Expanded(SharedString),
     Collapsed(SharedString),
+    /// The user moved onto an entry, with the arrow keys or the mouse. Browsing
+    /// it, not choosing it: the programmatic setters stay silent.
+    Selected(SharedString),
+    /// The user chose a leaf, with Enter or a click. A folder folds instead.
+    Confirmed(SharedString),
 }
 
 impl TreeItem {
@@ -317,6 +322,35 @@ impl TreeState {
         }
     }
 
+    /// A selection the user made, unlike `set_selected_index`: the host hears
+    /// about this one.
+    fn select_ix(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if self.selected_ix == Some(ix) {
+            return;
+        }
+        let Some(id) = self.entries.get(ix).map(|entry| entry.item.id.clone()) else {
+            return;
+        };
+        self.selected_ix = Some(ix);
+        cx.emit(TreeEvent::Selected(id));
+    }
+
+    /// What Enter and a click do to an entry: a folder folds, a leaf is chosen.
+    fn activate_ix(&mut self, ix: usize, cx: &mut Context<Self>) {
+        let Some((is_folder, id)) = self
+            .entries
+            .get(ix)
+            .map(|entry| (entry.is_folder(), entry.item.id.clone()))
+        else {
+            return;
+        };
+        if is_folder {
+            self.toggle_expand(ix, cx);
+        } else {
+            cx.emit(TreeEvent::Confirmed(id));
+        }
+    }
+
     fn toggle_expand(&mut self, ix: usize, cx: &mut Context<Self>) {
         let Some(entry) = self.entries.get(ix) else {
             return;
@@ -348,18 +382,11 @@ impl TreeState {
     }
 
     fn on_action_confirm(&mut self, _: &Confirm, _: &mut Window, cx: &mut Context<Self>) {
-        if self
-            .selected_ix
-            .and_then(|ix| self.entries.get(ix).map(|entry| (ix, entry.is_folder())))
-            .is_some_and(|(ix, is_folder)| {
-                if is_folder {
-                    self.toggle_expand(ix, cx);
-                }
-                is_folder
-            })
-        {
-            cx.notify();
-        }
+        let Some(ix) = self.selected_ix else {
+            return;
+        };
+        self.activate_ix(ix, cx);
+        cx.notify();
     }
 
     fn on_action_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
@@ -386,33 +413,41 @@ impl TreeState {
         }
     }
 
-    fn on_action_up(&mut self, _: &SelectUp, _: &mut Window, cx: &mut Context<Self>) {
+    fn select_previous(&mut self, cx: &mut Context<Self>) {
         let mut ix = self.selected_ix.unwrap_or(0);
         ix = ix
             .checked_sub(1)
             .unwrap_or_else(|| self.entries.len().saturating_sub(1));
-        self.selected_ix = Some(ix);
+        self.select_ix(ix, cx);
         self.scroll_handle
             .scroll_to_item(ix, gpui::ScrollStrategy::Top);
+    }
+
+    fn on_action_up(&mut self, _: &SelectUp, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_previous(cx);
         cx.notify();
     }
 
-    fn on_action_down(&mut self, _: &SelectDown, _: &mut Window, cx: &mut Context<Self>) {
+    fn select_next(&mut self, cx: &mut Context<Self>) {
         let mut ix = self.selected_ix.unwrap_or(0);
         ix = if ix + 1 < self.entries.len() {
             ix + 1
         } else {
             0
         };
-        self.selected_ix = Some(ix);
+        self.select_ix(ix, cx);
         self.scroll_handle
             .scroll_to_item(ix, gpui::ScrollStrategy::Bottom);
+    }
+
+    fn on_action_down(&mut self, _: &SelectDown, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_next(cx);
         cx.notify();
     }
 
     fn on_entry_click(&mut self, ix: usize, cx: &mut Context<Self>) {
-        self.selected_ix = Some(ix);
-        self.toggle_expand(ix, cx);
+        self.select_ix(ix, cx);
+        self.activate_ix(ix, cx);
         cx.notify();
     }
 }
@@ -648,6 +683,85 @@ mod tests {
             vec![
                 TreeEvent::Expanded("src".into()),
                 TreeEvent::Collapsed("src".into()),
+            ]
+        );
+    }
+
+    #[gpui::test]
+    fn walking_the_tree_reports_where_the_user_is(cx: &mut gpui::TestAppContext) {
+        let items = vec![
+            TreeItem::new("src", "src")
+                .expanded(true)
+                .child(TreeItem::new("src/lib.rs", "lib.rs")),
+            TreeItem::new("README.md", "README.md"),
+        ];
+        let state = cx.new(|cx| TreeState::new(cx).items(items));
+        let collector = cx.new(|cx| EventCollector::new(&state, cx));
+
+        state.update(cx, |state, cx| {
+            // Setting the selection from the outside is not the user moving.
+            state.set_selected_index(Some(0), cx);
+            state.select_next(cx);
+            state.select_next(cx);
+        });
+
+        let events = collector.read_with(cx, |collector, _| collector.events.borrow().clone());
+        assert_eq!(
+            events,
+            vec![
+                TreeEvent::Selected("src/lib.rs".into()),
+                TreeEvent::Selected("README.md".into()),
+            ]
+        );
+    }
+
+    #[gpui::test]
+    fn confirming_folds_a_folder_and_chooses_a_leaf(cx: &mut gpui::TestAppContext) {
+        let items = vec![
+            TreeItem::new("src", "src")
+                .expanded(true)
+                .child(TreeItem::new("src/lib.rs", "lib.rs")),
+        ];
+        let state = cx.new(|cx| TreeState::new(cx).items(items));
+        let collector = cx.new(|cx| EventCollector::new(&state, cx));
+
+        state.update(cx, |state, cx| {
+            state.set_selected_index(Some(1), cx);
+            state.activate_ix(1, cx);
+            state.set_selected_index(Some(0), cx);
+            state.activate_ix(0, cx);
+        });
+
+        let events = collector.read_with(cx, |collector, _| collector.events.borrow().clone());
+        assert_eq!(
+            events,
+            vec![
+                TreeEvent::Confirmed("src/lib.rs".into()),
+                TreeEvent::Collapsed("src".into()),
+            ],
+            "a leaf is chosen, a folder folds"
+        );
+    }
+
+    #[gpui::test]
+    fn a_click_says_both_where_it_landed_and_what_it_chose(cx: &mut gpui::TestAppContext) {
+        let items = vec![TreeItem::new("README.md", "README.md")];
+        let state = cx.new(|cx| TreeState::new(cx).items(items));
+        let collector = cx.new(|cx| EventCollector::new(&state, cx));
+
+        state.update(cx, |state, cx| {
+            state.on_entry_click(0, cx);
+            // Clicking the row it is already on still chooses it.
+            state.on_entry_click(0, cx);
+        });
+
+        let events = collector.read_with(cx, |collector, _| collector.events.borrow().clone());
+        assert_eq!(
+            events,
+            vec![
+                TreeEvent::Selected("README.md".into()),
+                TreeEvent::Confirmed("README.md".into()),
+                TreeEvent::Confirmed("README.md".into()),
             ]
         );
     }
