@@ -312,6 +312,7 @@ impl RenderOnce for Popover {
                     .refine_style(&style)
             })
             .when_some(self.trigger, |this, trigger| this.trigger_with(trigger))
+            .when_some(self.trigger_style, |this, style| this.trigger_style(style))
             .when_some(self.open, |this, open| this.open(open))
             .when_some(self.tracked_focus_handle, |this, handle| {
                 this.track_focus(&handle)

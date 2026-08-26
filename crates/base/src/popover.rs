@@ -3,13 +3,14 @@ use std::rc::Rc;
 use gpui::{
     Anchor, AnyElement, App, Context, DismissEvent, ElementId, EventEmitter, FocusHandle,
     Focusable, InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _,
-    Render, RenderOnce, Role, StatefulInteractiveElement as _, Subscription, Window, div,
-    prelude::FluentBuilder as _,
+    Render, RenderOnce, Role, StatefulInteractiveElement as _, StyleRefinement, Subscription,
+    Window, div, prelude::FluentBuilder as _,
 };
 
 use crate::{
     DeferredPopover, GlobalState, Popup, Selectable,
     actions::{Cancel, Confirm},
+    styled::StyledExt as _,
 };
 
 const CONTEXT: &str = "Popover";
@@ -173,6 +174,7 @@ pub struct Popover {
     open: Option<bool>,
     tracked_focus_handle: Option<FocusHandle>,
     trigger: Option<TriggerBuilder>,
+    trigger_style: Option<StyleRefinement>,
     content: Option<ContentBuilder>,
     mouse_button: MouseButton,
     overlay_closable: bool,
@@ -188,11 +190,20 @@ impl Popover {
             open: None,
             tracked_focus_handle: None,
             trigger: None,
+            trigger_style: None,
             content: None,
             mouse_button: MouseButton::Left,
             overlay_closable: true,
             on_open_change: None,
         }
+    }
+
+    /// Style refinement applied to the popup wrapper around the trigger.
+    /// Without it the wrapper keeps the trigger's intrinsic width, so flex
+    /// styles like `w_full` or `flex_shrink` on the trigger have no effect.
+    pub fn trigger_style(mut self, style: StyleRefinement) -> Self {
+        self.trigger_style = Some(style);
+        self
     }
 
     pub fn anchor(mut self, anchor: impl Into<Anchor>) -> Self {
@@ -306,6 +317,9 @@ impl RenderOnce for Popover {
                     });
                     cx.notify(parent_view_id);
                 }
+            })
+            .when_some(self.trigger_style.as_ref(), |this, style| {
+                this.refine_style(style)
             });
         if !open {
             return popup.into_any_element();
