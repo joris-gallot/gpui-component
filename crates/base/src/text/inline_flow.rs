@@ -23,6 +23,7 @@ use super::{
 
 const IMAGE_LEN: usize = 1;
 pub(super) const INLINE_CODE_PADDING: f32 = 2.;
+const INLINE_CODE_LAYOUT_SLOP: Pixels = px(1.);
 
 pub(super) struct InlineFlow {
     id: ElementId,
@@ -348,7 +349,9 @@ impl Element for InlineFlow {
                     element.prepaint_as_root(
                         bounds.origin + origin + point(padding, Pixels::ZERO),
                         size(
-                            AvailableSpace::Definite(fragment_size.width - padding * 2.),
+                            AvailableSpace::Definite(
+                                fragment_size.width - padding * 2. + INLINE_CODE_LAYOUT_SLOP,
+                            ),
                             AvailableSpace::Definite(fragment_size.height),
                         ),
                         window,
@@ -519,7 +522,13 @@ fn layout_flow(
                         } else {
                             Pixels::ZERO
                         };
-                        let width = shaped_line.width() + padding;
+                        let width = shaped_line.width().ceil()
+                            + padding
+                            + if is_code {
+                                INLINE_CODE_LAYOUT_SLOP
+                            } else {
+                                Pixels::ZERO
+                            };
                         // Keep the glyph paint layer large enough for ascenders and descenders.
                         // The compact code background is painted independently.
                         let segment_line_height = window
@@ -1123,6 +1132,7 @@ mod tests {
                     text_fragments[1].3.width,
                     WideMonoTextSystem::width_of("code", MONO, px(body_size * 0.875))
                         + px(INLINE_CODE_PADDING * 2.)
+                        + INLINE_CODE_LAYOUT_SLOP
                 );
                 let baseline = |family, fragment: &(&str, Pixels, Pixels, Size<Pixels>)| {
                     let font = window.text_system().resolve_font(&gpui::font(family));

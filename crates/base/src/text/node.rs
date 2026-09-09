@@ -1899,7 +1899,14 @@ impl BlockNode {
             .items_start()
             .content_start()
             .when(!options.todo && checked.is_none(), |this| {
-                this.child(list_item_prefix(ix, options.ordered, options.depth))
+                this.child(
+                    div()
+                        .h(line_height)
+                        .mr_1()
+                        .flex_none()
+                        .line_height(line_height)
+                        .child(list_item_prefix(ix, options.ordered, options.depth)),
+                )
             })
             .when_some(checked, |this, checked| {
                 // Todo list checkbox
