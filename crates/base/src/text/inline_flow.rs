@@ -214,10 +214,10 @@ impl Element for InlineFlow {
             .collect::<Vec<_>>();
         let layout_state = InlineFlowLayoutState::default();
         let layout_ref = layout_state.layout.clone();
+        let text_style = window.text_style();
 
         let layout_id = window.request_measured_layout(Default::default(), {
             move |known_dimensions, available_space, window, _cx| {
-                let text_style = window.text_style();
                 let wrap_width = if text_style.white_space == WhiteSpace::Normal {
                     known_dimensions.width.or(match available_space.width {
                         AvailableSpace::Definite(width) => Some(width),
