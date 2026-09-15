@@ -1816,7 +1816,6 @@ pub(super) mod test_fonts {
             match font_id {
                 MONO_ID => 1000.,
                 BOLD_MONO_ID => 1250.,
-                BODY_ID => 500.,
                 BOLD_BODY_ID => 750.,
                 _ => 500.,
             }
