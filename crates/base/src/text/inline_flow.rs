@@ -716,9 +716,9 @@ fn line_ranges(
 }
 
 /// Appends the wrap fragments for `range` of `text`. The line wrapper
-/// measures text fragments in the body font, so a span whose highlight sets
-/// another family is shaped with the same run the renderer uses and enters
-/// the wrapper as measured elements. Oversized spans retain word boundaries;
+/// measures text fragments in the body font, so a span whose highlight changes
+/// font metrics is shaped with the same run the renderer uses and enters the
+/// wrapper as measured elements. Oversized spans retain word boundaries;
 /// oversized words can break at grapheme boundaries without splitting Unicode.
 fn push_text_wrap_fragments<'a>(
     fragments: &mut Vec<WrapLineFragment<'a>>,
@@ -732,7 +732,11 @@ fn push_text_wrap_fragments<'a>(
     let font_size = text_style.font_size.to_pixels(window.rem_size());
     let mut cursor = range.start;
     for (highlight_range, highlight) in highlights {
-        if highlight.font_family.is_none() {
+        if highlight.font_family.is_none()
+            && highlight.font_size_scale.is_none()
+            && highlight.style.font_weight.is_none()
+            && highlight.style.font_style.is_none()
+        {
             continue;
         }
         let start = highlight_range.start.max(cursor);
@@ -765,18 +769,23 @@ fn push_text_wrap_fragments<'a>(
         } else {
             Pixels::ZERO
         };
-        let width = measure(span) + padding;
+        let layout_slop = if highlight.font_size_scale.is_some() {
+            INLINE_CODE_LAYOUT_SLOP
+        } else {
+            Pixels::ZERO
+        };
+        let width = measure(span) + padding + layout_slop;
         if width <= wrap_width {
             fragments.push(WrapLineFragment::element(width, span.len()));
         } else {
             for word in span.split_word_bounds() {
-                let width = measure(word) + padding;
+                let width = measure(word) + padding + layout_slop;
                 if width <= wrap_width {
                     fragments.push(WrapLineFragment::element(width, word.len()));
                 } else {
                     for grapheme in word.graphemes(true) {
                         fragments.push(WrapLineFragment::element(
-                            measure(grapheme) + padding,
+                            measure(grapheme) + padding + layout_slop,
                             grapheme.len(),
                         ));
                     }
@@ -1032,6 +1041,64 @@ mod tests {
             "the trailing word wraps to a second line: {text_lines:?}"
         );
     }
+    #[test]
+    fn bold_text_and_inline_code_do_not_overflow_the_flow() {
+        use super::super::inline::test_fonts::{BODY, MONO, WideMonoTextSystem};
+        use gpui::{AbsoluteLength, Empty, FontWeight, HighlightStyle, TestApp};
+
+        let mut app = TestApp::with_text_system(Arc::new(WideMonoTextSystem));
+        let mut window = app.open_window(|_, _| Empty);
+        let style = TextStyle {
+            font_family: BODY.into(),
+            font_size: AbsoluteLength::Pixels(px(10.)),
+            ..Default::default()
+        };
+        let text = "Pin the production webhook separately to 2026-04 in Polar. This configuration is stored in Polar, not in the repository.";
+        let bold_end = text.find(" separately").expect("bold text suffix");
+        let code_start = text.find("2026-04").expect("inline code");
+        let items = vec![MeasureItem::Text {
+            text: text.into(),
+            links: vec![],
+            highlights: vec![
+                (
+                    0..bold_end,
+                    InlineHighlight::from(HighlightStyle {
+                        font_weight: Some(FontWeight::BOLD),
+                        ..Default::default()
+                    }),
+                ),
+                (
+                    code_start..code_start + "2026-04".len(),
+                    InlineHighlight {
+                        font_family: Some(MONO.into()),
+                        font_size_scale: Some(0.875),
+                        ..Default::default()
+                    },
+                ),
+            ],
+        }];
+        let wrap_width = px(300.);
+
+        let layout = window
+            .update(|_, window, _| layout_flow(&items, &[None], &style, Some(wrap_width), window));
+
+        assert!(
+            layout.size.width <= wrap_width,
+            "flow width {:?} exceeds wrap width {:?}",
+            layout.size.width,
+            wrap_width
+        );
+        let reconstructed: String = layout
+            .fragments
+            .iter()
+            .filter_map(|fragment| match fragment {
+                PositionedFragment::Text { text, .. } => Some(text.as_ref()),
+                PositionedFragment::Image { .. } => None,
+            })
+            .collect();
+        assert_eq!(reconstructed, text);
+    }
+
     #[test]
     fn long_inline_code_wraps_in_mixed_flow() {
         use super::super::inline::test_fonts::{BODY, MONO, WideMonoTextSystem};

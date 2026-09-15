@@ -810,9 +810,9 @@ fn point_in_text_selection(
 #[cfg(test)]
 pub(super) mod test_fonts {
     use gpui::{
-        Bounds, DevicePixels, Font, FontId, FontMetrics, FontRun, GlyphId, LineLayout, Pixels,
-        PlatformTextSystem, RenderGlyphParams, ShapedGlyph, ShapedRun, Size, TextRenderingMode,
-        point, px, size,
+        Bounds, DevicePixels, Font, FontId, FontMetrics, FontRun, FontWeight, GlyphId, LineLayout,
+        Pixels, PlatformTextSystem, RenderGlyphParams, ShapedGlyph, ShapedRun, Size,
+        TextRenderingMode, point, px, size,
     };
     use std::borrow::Cow;
 
@@ -820,6 +820,7 @@ pub(super) mod test_fonts {
     pub(crate) const MONO: &str = "Mono";
     const BODY_ID: FontId = FontId(1);
     const MONO_ID: FontId = FontId(2);
+    const BOLD_BODY_ID: FontId = FontId(3);
     const UNITS_PER_EM: f32 = 1000.;
 
     pub(crate) struct WideMonoTextSystem;
@@ -827,7 +828,11 @@ pub(super) mod test_fonts {
     impl WideMonoTextSystem {
         /// Advance of one glyph in `font_id`, in em units.
         fn advance_units(font_id: FontId) -> f32 {
-            if font_id == MONO_ID { 1000. } else { 500. }
+            match font_id {
+                MONO_ID => 1000.,
+                BOLD_BODY_ID => 750.,
+                _ => 500.,
+            }
         }
 
         /// Width of `text` shaped entirely in `family` at `font_size`.
@@ -849,6 +854,8 @@ pub(super) mod test_fonts {
         fn font_id(&self, descriptor: &Font) -> anyhow::Result<FontId> {
             Ok(if descriptor.family.as_ref() == MONO {
                 MONO_ID
+            } else if descriptor.weight == FontWeight::BOLD {
+                BOLD_BODY_ID
             } else {
                 BODY_ID
             })
