@@ -3726,7 +3726,13 @@ impl BlockNode {
                     None => div().child(node.as_text().to_string()).into_any_element(),
                 };
 
-                div().pb(mb).child(inner).into_any_element()
+                div()
+                    .pb(mb)
+                    .child(inner)
+                    .when(options.is_last || options.in_list, |this| {
+                        this.child(div().h(px(1.)).flex_shrink_0())
+                    })
+                    .into_any_element()
             }
             BlockNode::Table { .. } => {
                 // Tables are data and read a step denser than the body. The
