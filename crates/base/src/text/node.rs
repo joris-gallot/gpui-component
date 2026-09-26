@@ -3095,7 +3095,7 @@ impl BlockNode {
                 div()
                     .flex_1()
                     .min_w_0()
-                    .overflow_hidden()
+                    .overflow_x_hidden()
                     // A done task steps back so the open ones stand out.
                     .when(checked == Some(true), |this| {
                         this.text_color(style.muted_foreground())
@@ -3161,7 +3161,7 @@ impl BlockNode {
                                                     div()
                                                         .w_full()
                                                         .pl(indent)
-                                                        .overflow_hidden()
+                                                        .overflow_x_hidden()
                                                         .child(text),
                                                 ),
                                             );
@@ -3230,7 +3230,7 @@ impl BlockNode {
                                                 .w_full()
                                                 .min_w_0()
                                                 .pl(indent)
-                                                .overflow_hidden()
+                                                .overflow_x_hidden()
                                                 .child(block),
                                         );
                                     }
