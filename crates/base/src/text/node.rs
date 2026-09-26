@@ -1943,7 +1943,7 @@ impl BlockNode {
                         ),
                 )
             })
-            .child(div().flex_1().min_w_0().overflow_hidden().child(content))
+            .child(div().flex_1().min_w_0().overflow_x_hidden().child(content))
     }
 
     fn render_list_item(
@@ -1996,7 +1996,7 @@ impl BlockNode {
                                                 div()
                                                     .w_full()
                                                     .pl(rems(1.))
-                                                    .overflow_hidden()
+                                                    .overflow_x_hidden()
                                                     .child(text),
                                             ),
                                         );
@@ -2063,7 +2063,7 @@ impl BlockNode {
                                             .w_full()
                                             .min_w_0()
                                             .pl(rems(1.))
-                                            .overflow_hidden()
+                                            .overflow_x_hidden()
                                             .child(block),
                                     );
                                 }
