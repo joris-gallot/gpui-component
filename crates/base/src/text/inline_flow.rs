@@ -25,6 +25,7 @@ use super::{
 
 const IMAGE_LEN: usize = 1;
 pub(super) const INLINE_CODE_PADDING: f32 = 4.;
+const INLINE_CODE_LAYOUT_SLOP: Pixels = px(1.);
 
 pub(super) struct InlineFlow {
     id: ElementId,
